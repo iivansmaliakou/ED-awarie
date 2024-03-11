@@ -8,6 +8,7 @@ AGH, Eksploracja danych, temat 9 - Analiza awarii w Stanach Zjednoczonych w lata
 ## Jak dodawać zmiany
 1. Utworz nową gałąź zgodnie ze wzorem `feature/{czynność, którą zrobiłeś}` (np. `feature/add-table`), następnie dodaj do niej swoje zmiany;
 ```
+git checkout -b feature/add-table
 git add ./data/new_table.csv
 git commit -m "dodałem nową tabelkę"
 git push origin feature/add-table
