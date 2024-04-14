@@ -249,7 +249,12 @@ for path, data_source in zip(paths[2:], data_sources[2:]):
         #, index_col=['REPORT_NUMBER', 'SUPPLEMENTAL_NUMBER'] 
         , engine='python'
         )
-    df_temp['data_source'] = data_sources[1]
+    df_temp['data_source'] = data_sources
+    # convert mft to bbls
+    df_temp['INTENTIONAL_RELEASE_BBLS'] =df_temp['INTENTIONAL_RELEASE'] * 178.10760668
+    df_temp['UNINTENTIONAL_RELEASE_BBLS'] =df_temp['UNINTENTIONAL_RELEASE'] * 178.10760668  
+    # drop columns
+    df_temp.drop(labels=['INTENTIONAL_RELEASE', 'UNINTENTIONAL_RELEASE'], axis=1, inplace=True)    
     df = pd.concat([df, df_temp])
 
 print(df.shape)
@@ -269,7 +274,7 @@ columns_to_drop = df.columns[df.columns.str.contains('Unnamed')]
 df = df.loc[:, ~df.columns.isin(columns_to_drop)]
 #%%
 # rename some columns
-df.rename(columns={'LOCATION_LATITUDE': 'case_lat', 'LOCATION_LONGITUDE': 'case_lon','COMMODITY_RELEASED_TYPE': 'rlsd_type'}, inplace=True)
+df.rename(columns={'LOCATION_LATITUDE': 'case_lat', 'LOCATION_LONGITUDE': 'case_lon'}, inplace=True)
 
 #%%
 # filter out dates outside of our range
@@ -297,7 +302,7 @@ cols_qgis = [
 
 df_qgis = df[cols_qgis]
 
-#df_qgis.to_csv('df_qgis.csv', index=True, index_label='case_idx')
+df_qgis.rename(columns={'COMMODITY_RELEASED_TYPE': 'rlsd_type'}, inplace=True)
 df_qgis.to_csv('df_qgis.csv', index=False)
 
 """
@@ -353,18 +358,20 @@ df_20prcnt_nan = df.loc[:, cols_20prcnt_nan]
 
 #%%
 # manually selected columns
-selected_cols_20prcnt_nan = [
+selected_cols = [
     #'case_idx',
     'data_source',    
     'case_lat',
     'case_lon',
     'case_date',
-    'YYYY-mm',
-    'YYYY-mm_prev', 
-    'rlsd_type',    
-    'FATALITY_IND',
+    #'YYYY-mm',
+    #'YYYY-mm_prev', 
+    'COMMODITY_RELEASED_TYPE',
+    'INTENTIONAL_RELEASE_BBLS',
+    'UNINTENTIONAL_RELEASE_BBLS',    
+    #'FATALITY_IND',
     'FATAL',
-    'INJURY_IND',
+    #'INJURY_IND',
     'INJURE',
     'ON_OFF_SHORE',
     'IGNITE_IND',
@@ -390,7 +397,7 @@ selected_cols_20prcnt_nan = [
     'COULD_BE_HCA',
     'ACCIDENT_PSIG',
     'MOP_PSIG',
-    'ACCIDENT_PRESSURE',
+    #'ACCIDENT_PRESSURE',
     'PIPELINE_FUNCTION',
     'SCADA_IN_PLACE_IND',
     'INVESTIGATION_STATUS',
@@ -398,15 +405,50 @@ selected_cols_20prcnt_nan = [
     'CONTRACTOR_DRUG_TEST_IND',
     'zone',
     'TAVG',
-    'TMAX',
-    'TMIN',
+    #'TMAX',
+    #'TMIN',
     'TAVG_prev',
-    'TMAX_prev',
-    'TMIN_prev'
+    #'TMAX_prev',
+    #'TMIN_prev'
 ]
 
 #%%
-df2 = df.loc[:, selected_cols_20prcnt_nan].reset_index(drop=True)
+df2 = df.loc[:, selected_cols].reset_index(drop=True)
+
+#%%
+mapping = {'YES': 1, 'NO': 0}
+
+cols_binary = [
+    'IGNITE_IND',
+    'EXPLODE_IND',
+    'FEDERAL',
+    'CROSSING',
+    'COULD_BE_HCA',
+    'SCADA_IN_PLACE_IND',
+    'EMPLOYEE_DRUG_TEST_IND',
+    'CONTRACTOR_DRUG_TEST_IND',]
+
+#%%
+df2[cols_binary] = df2[cols_binary].map(lambda x: mapping.get(x,x))
+
+#%%
+df2['case_date'] = pd.to_datetime(df2['case_date'])
+
+#%%
+# calculate installation age
+df2['INSTALLATION_YEAR'].replace('UNKNOWN', np.nan, inplace=True)
+df2['INSTALLATION_YEAR'] = pd.to_datetime(df2['INSTALLATION_YEAR'])
+
+df2['inst_age_in_days'] = (df2['case_date'] - df2['INSTALLATION_YEAR']).dt.days
+df2.drop(labels='INSTALLATION_YEAR', axis=1, inplace=True)
+
+#%%
+df2['TAVG'] = (df2['TAVG'] + df2['TAVG_prev']) / 2
+df2.drop(labels='TAVG_prev', axis=1, inplace=True)
+
+#%%
+df2['accident_pressure_as_%_mop_psig'] = df2['ACCIDENT_PSIG'] / df2['MOP_PSIG'] * 100
+df2.drop(labels='ACCIDENT_PSIG', axis=1, inplace=True)
 
 #%%
 df2.to_csv('processed_data.csv', index=True, index_label='case_idx')
